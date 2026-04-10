@@ -11,6 +11,7 @@ import {
   getAlerts,
   updateAlert,
 } from "../funtions/alertOperations";
+import { hasRedisConfig } from "../lib/redis";
 import { getAlertQueue } from "../queues/alertQueue";
 import {
   getAuthedSupabaseClient,
@@ -37,6 +38,12 @@ export default async function alertRoutes(app: FastifyInstance) {
   app.post<{ Body: AlertBody }>("/submit", async (request, reply) => {
     const { title, message, userId, category } = request.body ?? {};
     let createdAlertId: number | undefined;
+
+    if (!hasRedisConfig()) {
+      return reply.code(503).send({
+        error: "alerts are temporarily unavailable: Redis is not configured",
+      });
+    }
 
     if (!title || !message) {
       return reply.code(400).send({

@@ -2,6 +2,16 @@ import IORedis, { Redis, RedisOptions } from "ioredis";
 
 let redisClient: Redis | undefined;
 
+export function hasRedisConfig() {
+  return Boolean(
+    process.env.REDIS_URL ||
+    process.env.REDIS_HOST ||
+    process.env.REDIS_PORT ||
+    process.env.REDIS_USERNAME ||
+    process.env.REDIS_PASSWORD,
+  );
+}
+
 function getRedisOptions(): RedisOptions {
   return {
     host: process.env.REDIS_HOST || "127.0.0.1",
@@ -18,6 +28,10 @@ export function getRedisClient() {
     const redisUrl = process.env.REDIS_URL;
     if (redisUrl) {
       redisClient = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+    } else if (!hasRedisConfig()) {
+      throw new Error(
+        "Redis is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
+      );
     } else {
       redisClient = new IORedis(getRedisOptions());
     }

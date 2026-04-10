@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 
+import { hasRedisConfig } from "../lib/redis";
 import { getTestQueue } from "../queues/testQueue";
 
 type EnqueueBody = {
@@ -9,6 +10,12 @@ type EnqueueBody = {
 
 export default async function queueRoutes(app: FastifyInstance) {
   app.post<{ Body: EnqueueBody }>("/test", async (request, reply) => {
+    if (!hasRedisConfig()) {
+      return reply.code(503).send({
+        error: "queue unavailable: Redis is not configured",
+      });
+    }
+
     try {
       const { message, delayMs = 0 } = request.body ?? {};
       const queue = getTestQueue();
