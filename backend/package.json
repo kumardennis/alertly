@@ -5,6 +5,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch api/index.ts",
     "start": "node dist/api/index.js",
+    "start:worker": "node dist/api/worker.js",
     "supabase:genTypes": "supabase gen types typescript --project-id vebbrghiubfssxucqbfq > api/types/supabaseTypes.ts"
   },
   "dependencies": {

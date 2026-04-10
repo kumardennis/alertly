@@ -11,3 +11,16 @@ services:
       - key: PORT
         value: 3000
     autoDeploy: true
+
+  - type: worker
+    name: alertly-worker
+    runtime: node
+    region: frankfurt
+    buildCommand: cd backend && npm install --include=dev && npm run build
+    startCommand: cd backend && npm run start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_TEST_WORKER
+        value: false
+    autoDeploy: true

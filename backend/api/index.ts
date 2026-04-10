@@ -1,11 +1,8 @@
 import "dotenv/config";
 import Fastify from "fastify";
 
-import { hasRedisConfig } from "./lib/redis";
 import authRoutes from "./routes/auth";
 import queueRoutes from "./routes/queue";
-import { startTestWorker, stopTestWorker } from "./queues/testQueue";
-import { startAlertWorker, stopAlertWorker } from "./queues/alertQueue";
 import alertRoutes from "./routes/alerts";
 import webhooksRoutes from "./routes/webhooks";
 
@@ -25,34 +22,10 @@ export function buildApp() {
 
 export async function start() {
   const app = buildApp();
-  const redisConfigured = hasRedisConfig();
-  const shouldStartTestWorker =
-    redisConfigured && process.env.ENABLE_TEST_WORKER === "true";
-  const shouldStartAlertWorker =
-    redisConfigured && process.env.ENABLE_ALERT_WORKER !== "false";
   const port = Number(process.env.PORT || 3000);
   const host = process.env.HOST || "0.0.0.0";
 
   try {
-    app.addHook("onClose", async () => {
-      await stopTestWorker();
-      await stopAlertWorker();
-    });
-
-    if (!redisConfigured) {
-      app.log.warn(
-        "Redis is not configured. Queue workers are disabled until REDIS_URL or REDIS_HOST/REDIS_PORT is set.",
-      );
-    }
-
-    if (shouldStartTestWorker) {
-      startTestWorker(app.log);
-    }
-
-    if (shouldStartAlertWorker) {
-      startAlertWorker(app.log);
-    }
-
     await app.listen({ port, host });
   } catch (error) {
     app.log.error(error);
