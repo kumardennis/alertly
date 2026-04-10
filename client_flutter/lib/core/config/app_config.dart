@@ -11,7 +11,7 @@ class AppConfig {
 
   static const backendBaseUrl = String.fromEnvironment(
     'BACKEND_BASE_URL',
-    defaultValue: 'http://192.168.1.28:3000',
+    defaultValue: 'https://alertly-backend-api-server.onrender.com',
   );
 
   static void validate() {

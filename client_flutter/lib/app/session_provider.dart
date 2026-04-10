@@ -7,8 +7,13 @@ import '../core/notifications/notification_permission_service.dart';
 import '../core/supabase/supabase_provider.dart';
 import '../core/network/api_client.dart';
 import '../core/location/location_provider.dart';
+import '../features/alerts/alerts_provider.dart';
+import '../features/alerts/users_received_alerts_provider.dart';
+import '../features/onboarding/onboarding_provider.dart';
+import '../features/profile/profile_alerts_provider.dart';
 import '../features/users/data/users_repository.dart';
 import '../features/users/data/users_devices_repository.dart';
+import '../features/users/profile_provider.dart';
 
 final sessionProvider = NotifierProvider<SessionNotifier, Session?>(
   SessionNotifier.new,
@@ -25,6 +30,17 @@ final currentUserProvider = Provider<User?>((ref) {
 class SessionNotifier extends Notifier<Session?> {
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<String>? _tokenRefreshSub;
+  String? _activeAuthId;
+
+  void _invalidateUserScopedState() {
+    ref.invalidate(profileProvider);
+    ref.invalidate(alertsProvider);
+    ref.invalidate(usersReceivedAlertsProvider);
+    ref.invalidate(profileAlertsProvider);
+    ref.invalidate(profileVerificationsCountProvider);
+    ref.invalidate(locationProvider);
+    ref.invalidate(onboardingProvider);
+  }
 
   Future<void> _syncLoginDataForAuthId(String authId) async {
     final client = ref.read(supabaseClientProvider);
@@ -106,6 +122,7 @@ class SessionNotifier extends Notifier<Session?> {
     state = client.auth.currentSession;
 
     final existingAuthId = state?.user.id;
+    _activeAuthId = existingAuthId;
     if (existingAuthId != null) {
       unawaited(_syncLoginDataForAuthId(existingAuthId));
       _startTokenRefreshSync(existingAuthId);
@@ -113,12 +130,19 @@ class SessionNotifier extends Notifier<Session?> {
 
     _authSub?.cancel();
     _authSub = client.auth.onAuthStateChange.listen((data) {
+      final previousAuthId = _activeAuthId;
+      final nextAuthId = data.session?.user.id;
+      _activeAuthId = nextAuthId;
+
+      if (previousAuthId != nextAuthId) {
+        _invalidateUserScopedState();
+      }
+
       state = data.session;
 
-      final authId = data.session?.user.id;
-      if (authId != null) {
-        unawaited(_syncLoginDataForAuthId(authId));
-        _startTokenRefreshSync(authId);
+      if (nextAuthId != null) {
+        unawaited(_syncLoginDataForAuthId(nextAuthId));
+        _startTokenRefreshSync(nextAuthId);
       } else {
         _tokenRefreshSub?.cancel();
         _tokenRefreshSub = null;

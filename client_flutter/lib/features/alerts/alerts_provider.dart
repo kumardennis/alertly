@@ -1,4 +1,4 @@
-import 'package:client_flutter/features/users/profile_provider.dart';
+import 'package:alertly/features/users/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/alert.dart';
@@ -64,10 +64,7 @@ class AlertsNotifier extends AsyncNotifier<List<Alert>> {
     final userId = ref.read(profileProvider).valueOrNull?.id;
     if (userId == null) return;
 
-    await _repo.createAlertVerification(
-      alertId: id,
-      userId: userId,
-    );
+    await _repo.createAlertVerification(alertId: id, userId: userId);
     await reload();
   }
 }

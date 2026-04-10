@@ -12,7 +12,7 @@ class AlertsRepository {
   Future<List<Alert>> getAlerts({
     Map<String, dynamic>? filters,
     String columns =
-        '*, tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
+        '*, creator:users(*), tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
     int? limit,
     String? orderBy,
     bool ascending = false,
@@ -40,7 +40,7 @@ class AlertsRepository {
         await _client
             .from('alerts')
             .select(
-              '*, tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
+              '*, creator:users(*), tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
             )
             .eq('id', id)
             .single();
@@ -65,7 +65,7 @@ class AlertsRepository {
             .update(payload)
             .eq('id', id)
             .select(
-              '*, tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
+              '*, creator:users(*), tierInfo:tiers(*), verifications:alerts_verifications(*, user:users(*))',
             )
             .single();
     return Alert.fromJson(data);

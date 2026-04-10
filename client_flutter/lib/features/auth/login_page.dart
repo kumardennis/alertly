@@ -1,4 +1,4 @@
-import 'package:client_flutter/core/theme/app_theme.dart';
+import 'package:alertly/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

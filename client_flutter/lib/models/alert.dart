@@ -1,4 +1,4 @@
-import 'package:client_flutter/models/app_user.dart';
+import 'package:alertly/models/app_user.dart';
 
 import '../core/parsing/typed_parser.dart';
 
@@ -77,6 +77,7 @@ class Alert {
     this.tierInfo,
     this.title,
     this.userId,
+    this.creator,
     this.verifications = const [],
   });
 
@@ -93,6 +94,7 @@ class Alert {
   final Tier? tierInfo;
   final String? title;
   final int? userId;
+  final AppUser? creator;
   final List<AlertVerification> verifications;
 
   factory Alert.fromJson(Object? json) {
@@ -112,6 +114,7 @@ class Alert {
       tierInfo: typed.opt('tierInfo', Tier.fromJson),
       title: typed.optString('title'),
       userId: typed.optInt('user_id'),
+      creator: typed.opt('creator', AppUser.fromJson),
       verifications: _parseVerifications(typed),
     );
   }

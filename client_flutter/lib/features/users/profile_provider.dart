@@ -10,7 +10,7 @@ final profileProvider = AsyncNotifierProvider<ProfileNotifier, AppUser?>(
 );
 
 class ProfileNotifier extends AsyncNotifier<AppUser?> {
-  late final UsersRepository _repo;
+  late UsersRepository _repo;
 
   @override
   Future<AppUser?> build() async {

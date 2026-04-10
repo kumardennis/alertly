@@ -24,7 +24,7 @@ class UsersReceivedAlertsNotifier extends AsyncNotifier<List<Alert>> {
     final rows = await client
         .from('users_received_alerts')
         .select(
-          'created_at, alert:alerts(*, tierInfo:tiers(*), verifications:alerts_verifications(*, users!inner(*)))',
+          'created_at, alert:alerts(*, creator:users(*), tierInfo:tiers(*), verifications:alerts_verifications(*, users!inner(*)))',
         )
         .eq('receiver_id', profile.id)
         .match({'alert.status': 'published'})

@@ -1,5 +1,5 @@
-name: client_flutter
-description: "A new Flutter project."
+name: alertly
+description: "Alertly - Community alert platform."
 publish_to: 'none'
 version: 0.1.0
 

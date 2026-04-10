@@ -1,5 +1,5 @@
-import 'package:client_flutter/features/alerts/users_received_alerts_provider.dart';
-import 'package:client_flutter/models/app_user.dart';
+import 'package:alertly/features/alerts/users_received_alerts_provider.dart';
+import 'package:alertly/models/app_user.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,6 +26,7 @@ class _AlertDetailsBottomSheetState
     extends ConsumerState<AlertDetailsBottomSheet> {
   bool _resolving = false;
   bool _verifying = false;
+  bool _verifiedByCurrentUserJustNow = false;
   bool _loadingCoordinates = false;
   Map<String, double>? _coordinates;
 
@@ -128,9 +129,15 @@ class _AlertDetailsBottomSheetState
   @override
   Widget build(BuildContext context) {
     final alerts = ref.watch(alertsProvider).valueOrNull;
-    final alert = widget.alert;
+    final alert =
+        alerts?.firstWhere(
+          (item) => item.id == widget.alert.id,
+          orElse: () => widget.alert,
+        ) ??
+        widget.alert;
     final text = Theme.of(context).textTheme;
     final reportedAt = alert.publishedAt ?? alert.createdAt;
+    final creatorUsername = alert.creator?.username.trim();
     final profile = ref.watch(profileProvider).valueOrNull;
     final canResolve =
         profile != null &&
@@ -140,8 +147,6 @@ class _AlertDetailsBottomSheetState
     final createdByCurrentUser = profile != null && alert.userId == profile.id;
     final verifiedRows =
         alert.verifications.where((item) => item.verified != false).toList();
-
-    print('Alert verifications: ${alerts}, verified: ${verifiedRows.length}');
 
     return Container(
       decoration: const BoxDecoration(
@@ -367,39 +372,52 @@ class _AlertDetailsBottomSheetState
                     ),
                     const SizedBox(height: 16),
 
-                    _CommunityVerificationCard(
-                      verifications: verifiedRows,
-                      profile: profile!,
-                      disabled: createdByCurrentUser || _verifying,
-                      onVerify: () async {
-                        if (_verifying) return;
+                    if (profile != null)
+                      _CommunityVerificationCard(
+                        verifications: verifiedRows,
+                        profile: profile,
+                        forceAlreadyVerified: _verifiedByCurrentUserJustNow,
+                        disabled: createdByCurrentUser || _verifying,
+                        onVerify: () async {
+                          if (_verifying) return;
 
-                        setState(() => _verifying = true);
-                        try {
-                          await ref
-                              .read(alertsProvider.notifier)
-                              .verifyAlert(alert.id);
-                          await ref
-                              .read(usersReceivedAlertsProvider.notifier)
-                              .reload();
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Thanks. Your verification was recorded.',
+                          setState(() => _verifying = true);
+                          try {
+                            await ref
+                                .read(alertsProvider.notifier)
+                                .verifyAlert(alert.id);
+                            await ref
+                                .read(usersReceivedAlertsProvider.notifier)
+                                .reload();
+                            if (!mounted) return;
+                            setState(() {
+                              _verifiedByCurrentUserJustNow = true;
+                            });
+                            final messenger = ScaffoldMessenger.maybeOf(
+                              context,
+                            );
+                            Navigator.of(context).pop();
+                            messenger?.showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Thanks. Your verification was recorded.',
+                                ),
                               ),
-                            ),
-                          );
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Verification failed: $e')),
-                          );
-                        } finally {
-                          if (mounted) setState(() => _verifying = false);
-                        }
-                      },
-                    ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Verification failed: $e'),
+                              ),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _verifying = false);
+                          }
+                        },
+                      )
+                    else
+                      const SizedBox.shrink(),
                     const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
@@ -428,6 +446,8 @@ class _AlertDetailsBottomSheetState
                               ? _formatDateTime(alert.publishedAt!)
                               : 'Not published yet',
                     ),
+                    if (creatorUsername != null && creatorUsername.isNotEmpty)
+                      _InfoRow(label: 'Creator', value: '@$creatorUsername'),
                     if (canResolve) ...[
                       const SizedBox(height: 12),
                       SizedBox(
@@ -544,20 +564,22 @@ class _CommunityVerificationCard extends StatelessWidget {
     required this.verifications,
     required this.onVerify,
     required this.profile,
+    this.forceAlreadyVerified = false,
     this.disabled = false,
   });
 
   final List<AlertVerification> verifications;
   final VoidCallback onVerify;
   final AppUser profile;
+  final bool forceAlreadyVerified;
   final bool disabled;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final currentUserAlreadySeenThis = verifications.any(
-      (item) => item.userId == profile.id,
-    );
+    final currentUserAlreadySeenThis =
+        forceAlreadyVerified ||
+        verifications.any((item) => item.userId == profile.id);
 
     return Container(
       width: double.infinity,
@@ -597,9 +619,11 @@ class _CommunityVerificationCard extends StatelessWidget {
                 final index = entry.key;
                 final verification = entry.value;
                 final user = verification.users;
+                final firstName = user?.firstName?.trim() ?? '';
+                final lastName = user?.lastName?.trim() ?? '';
                 final initials =
-                    user != null
-                        ? '${user.firstName![0]}${user.lastName![0]}'
+                    firstName.isNotEmpty || lastName.isNotEmpty
+                        ? '${firstName.isNotEmpty ? firstName[0] : '?'}${lastName.isNotEmpty ? lastName[0] : '?'}'
                         : '??';
                 return _WitnessAvatar(
                   initials: initials,

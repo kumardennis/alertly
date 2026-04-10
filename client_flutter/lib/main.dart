@@ -9,6 +9,8 @@ import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 
+const double _portraitTabletMaxWidth = 768;
+
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 String? _initialNotificationAlertId;
@@ -78,8 +80,29 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      title: 'Hoodcast',
+      title: 'Alertly',
       theme: AppTheme.light(),
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth <= _portraitTabletMaxWidth) {
+              return content;
+            }
+
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: _portraitTabletMaxWidth,
+                ),
+                child: content,
+              ),
+            );
+          },
+        );
+      },
       routerConfig: router,
     );
   }
