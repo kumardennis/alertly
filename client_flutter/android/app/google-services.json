@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "259936288609",
+    "project_id": "hoodcast-c30ce",
+    "storage_bucket": "hoodcast-c30ce.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:259936288609:android:f361aeea3c4505fc2a8f20",
+        "android_client_info": {
+          "package_name": "com.example.client_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdyOiQdx1hsIyejmkOvrL4jToopWWEJn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

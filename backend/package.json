@@ -1,0 +1,23 @@
+{
+  "name": "hoodcast-backend",
+  "main": "dist/api/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch api/index.ts",
+    "start": "tsx api/index.ts",
+    "supabase:genTypes": "supabase gen types typescript --project-id vebbrghiubfssxucqbfq > api/types/supabaseTypes.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "bullmq": "^5.73.0",
+    "dotenv": "^17.4.1",
+    "fastify": "^5.8.4",
+    "firebase-admin": "^13.7.0",
+    "ioredis": "^5.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
