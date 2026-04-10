@@ -3,7 +3,7 @@ services:
     name: alertly-backend
     runtime: node
     region: frankfurt
-    buildCommand: cd backend && npm install && npm run build
+    buildCommand: cd backend && npm install --include=dev && npm run build
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
