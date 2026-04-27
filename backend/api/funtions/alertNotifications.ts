@@ -14,28 +14,26 @@ export const notifyUsersOfNewAlert = async (
 ): Promise<NotifyUsersResult> => {
   const db = getSupabaseServiceClient();
 
-  // Keep notifications idempotent per alert in case jobs are retried.
-  //   const { count: existingDeliveries, error: existingError } = await db
-  //     .from("users_received_alerts")
-  //     .select("id", { head: true, count: "exact" })
-  //     .eq("alert_id", alert.id);
+  // Keep notifications idempotent per alert in case webhooks/workers retrigger.
+  const { count: existingDeliveries, error: existingError } = await db
+    .from("users_received_alerts")
+    .select("id", { head: true, count: "exact" })
+    .eq("alert_id", alert.id);
 
-  //   console.log(`Existing deliveries for alert ${alert.id}:`, existingDeliveries);
+  if (existingError) {
+    throw new Error(
+      `unable to check delivery records: ${existingError.message}`,
+    );
+  }
 
-  //   if (existingError) {
-  //     throw new Error(
-  //       `unable to check delivery records: ${existingError.message}`,
-  //     );
-  //   }
-
-  //   if ((existingDeliveries ?? 0) > 0) {
-  //     return {
-  //       skipped: true,
-  //       reason: "alert notifications already dispatched",
-  //       recipients: 0,
-  //       notificationsSent: 0,
-  //     };
-  //   }
+  if ((existingDeliveries ?? 0) > 0) {
+    return {
+      skipped: true,
+      reason: "alert notifications already dispatched",
+      recipients: 0,
+      notificationsSent: 0,
+    };
+  }
 
   const { data: eligibleRecipients, error: eligibleRecipientsError } =
     await db.rpc("get_alert_recipient_user_ids", {
