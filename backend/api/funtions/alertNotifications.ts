@@ -55,15 +55,44 @@ export const notifyUsersOfNewAlert = async (
     );
   }
 
-  const eligibleUserIds = (eligibleRecipients ?? [3, 4])
+  const eligibleUserIds = (eligibleRecipients ?? [])
     .map((item) => item.user_id)
     .filter((userId): userId is number => typeof userId === "number");
+
+  const deliveryRecipientIds = new Set<number>(eligibleUserIds);
+  if (typeof alert.user_id === "number") {
+    deliveryRecipientIds.add(alert.user_id);
+  }
+
+  if (!deliveryRecipientIds.size) {
+    return {
+      skipped: true,
+      reason: "no recipients available for delivery persistence",
+      recipients: 0,
+      notificationsSent: 0,
+    };
+  }
+
+  const deliveryRows = [...deliveryRecipientIds].map((receiverId) => ({
+    alert_id: alert.id,
+    receiver_id: receiverId,
+  }));
+
+  const { error: deliveriesError } = await db
+    .from("users_received_alerts")
+    .insert(deliveryRows);
+
+  if (deliveriesError) {
+    throw new Error(
+      `unable to persist delivery rows: ${deliveriesError.message}`,
+    );
+  }
 
   if (!eligibleUserIds.length) {
     return {
       skipped: true,
       reason: "no recipients matched location filters",
-      recipients: 0,
+      recipients: deliveryRecipientIds.size,
       notificationsSent: 0,
     };
   }
@@ -96,7 +125,7 @@ export const notifyUsersOfNewAlert = async (
     return {
       skipped: true,
       reason: "no eligible recipients",
-      recipients: 0,
+      recipients: deliveryRecipientIds.size,
       notificationsSent: 0,
     };
   }
@@ -117,27 +146,9 @@ export const notifyUsersOfNewAlert = async (
     },
   });
 
-  const deliveryRows = [...recipients].map((receiverId) => ({
-    alert_id: alert.id,
-    receiver_id: receiverId,
-  }));
-
-  const { error: deliveriesError } = await db
-    .from("users_received_alerts")
-    .insert([
-      ...deliveryRows,
-      { alert_id: alert.id, receiver_id: alert.user_id },
-    ]); // Insert a row with currentuser as well as receiver_id
-
-  if (deliveriesError) {
-    throw new Error(
-      `unable to persist delivery rows: ${deliveriesError.message}`,
-    );
-  }
-
   return {
     skipped: false,
-    recipients: recipients.size,
+    recipients: deliveryRecipientIds.size,
     notificationsSent: fcmResponse.successCount,
   };
 };

@@ -1,4 +1,5 @@
 import 'package:alertly/features/users/profile_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/alert.dart';
@@ -28,9 +29,57 @@ class AlertsNotifier extends AsyncNotifier<List<Alert>> {
     );
   }
 
+  Future<List<Alert>> _fetchAlertsInMapBounds({
+    required double southLat,
+    required double westLng,
+    required double northLat,
+    required double eastLng,
+    int limit = 200,
+  }) {
+    return _repo.getAlertsInMapBounds(
+      southLat: southLat,
+      westLng: westLng,
+      northLat: northLat,
+      eastLng: eastLng,
+      limit: limit,
+    );
+  }
+
   Future<void> reload() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_fetchAlerts);
+  }
+
+  Future<void> reloadInMapBounds({
+    required double southLat,
+    required double westLng,
+    required double northLat,
+    required double eastLng,
+    int limit = 200,
+  }) async {
+    debugPrint(
+      '[AlertsProvider] reloadInMapBounds start '
+      'southLat=$southLat westLng=$westLng northLat=$northLat eastLng=$eastLng limit=$limit',
+    );
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final alerts = await _fetchAlertsInMapBounds(
+        southLat: southLat,
+        westLng: westLng,
+        northLat: northLat,
+        eastLng: eastLng,
+        limit: limit,
+      );
+      debugPrint(
+        '[AlertsProvider] reloadInMapBounds success alertsCount=${alerts.length}',
+      );
+      return alerts;
+    });
+
+    if (state.hasError) {
+      debugPrint('[AlertsProvider] reloadInMapBounds error=${state.error}');
+    }
   }
 
   Future<void> createAlert(Map<String, dynamic> payload) async {

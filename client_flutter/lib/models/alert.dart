@@ -111,13 +111,27 @@ class Alert {
       radiusM: typed.optInt('radius_m'),
       status: typed.optString('status'),
       tier: typed.optInt('tier'),
-      tierInfo: typed.opt('tierInfo', Tier.fromJson),
+      tierInfo:
+          typed.opt('tierInfo', Tier.fromJson) ??
+          _tierFromInt(typed.optInt('tier')),
       title: typed.optString('title'),
       userId: typed.optInt('user_id'),
       creator: typed.opt('creator', AppUser.fromJson),
       verifications: _parseVerifications(typed),
     );
   }
+}
+
+const _kTierPriorities = <int, String>{
+  1: 'low',
+  2: 'medium',
+  3: 'high',
+  4: 'emergency',
+};
+
+Tier? _tierFromInt(int? tier) {
+  if (tier == null) return null;
+  return Tier(id: tier, priority: _kTierPriorities[tier]);
 }
 
 List<AlertVerification> _parseVerifications(TypedMap typed) {

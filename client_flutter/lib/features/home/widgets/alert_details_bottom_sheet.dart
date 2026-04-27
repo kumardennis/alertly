@@ -128,13 +128,7 @@ class _AlertDetailsBottomSheetState
 
   @override
   Widget build(BuildContext context) {
-    final alerts = ref.watch(alertsProvider).valueOrNull;
-    final alert =
-        alerts?.firstWhere(
-          (item) => item.id == widget.alert.id,
-          orElse: () => widget.alert,
-        ) ??
-        widget.alert;
+    final alert = widget.alert;
     final text = Theme.of(context).textTheme;
     final reportedAt = alert.publishedAt ?? alert.createdAt;
     final creatorUsername = alert.creator?.username.trim();
@@ -517,6 +511,7 @@ class _AlertDetailsBottomSheetState
 
   String _severityLevel(Alert item) {
     final tierLabel = item.tierInfo?.priority;
+    debugPrint('Alert ${item.id} has tier label: $tierLabel, ${item.tierInfo}');
     switch (tierLabel) {
       case 'low':
         return 'Low';

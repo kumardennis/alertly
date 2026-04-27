@@ -123,4 +123,70 @@ class AlertsRepository {
 
     return {'latitude': latitude, 'longitude': longitude};
   }
+
+  Future<List<Alert>> getAlertsInMapBounds({
+    required double southLat,
+    required double westLng,
+    required double northLat,
+    required double eastLng,
+    int limit = 200,
+  }) async {
+    final data = await _client.rpc(
+      'get_alerts_in_map_bounds',
+      params: {
+        'p_south_lat': southLat,
+        'p_west_lng': westLng,
+        'p_north_lat': northLat,
+        'p_east_lng': eastLng,
+        'p_limit': limit,
+      },
+    );
+
+    if (data is! List) {
+      return const [];
+    }
+
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(_mapBoundsRowToAlert)
+        .toList();
+  }
+
+  Alert _mapBoundsRowToAlert(Map<String, dynamic> row) {
+    final id = row['alert_id'] as int?;
+    final latitude = (row['latitude'] as num?)?.toDouble();
+    final longitude = (row['longitude'] as num?)?.toDouble();
+    final tier = row['tier'] as int?;
+
+    return Alert.fromJson({
+      'id': id,
+      'title': row['title'],
+      'body': row['body'],
+      'category': row['category'],
+      'status': row['status'],
+      'flagged': row['flagged'],
+      'user_id': row['user_id'],
+      'tier': tier,
+      'radius_m': row['radius_m'],
+      'created_at': row['created_at'],
+      'published_at': row['published_at'],
+      'location': {
+        'type': 'Point',
+        'coordinates': [longitude, latitude],
+      },
+      'tierInfo': _tierInfoFromInt(tier),
+    });
+  }
+
+  static const _tierPriorities = {
+    1: 'low',
+    2: 'medium',
+    3: 'high',
+    4: 'emergency',
+  };
+
+  static Map<String, dynamic>? _tierInfoFromInt(int? tier) {
+    if (tier == null) return null;
+    return {'id': tier, 'priority': _tierPriorities[tier]};
+  }
 }

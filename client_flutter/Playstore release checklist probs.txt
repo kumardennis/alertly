@@ -1,0 +1,11 @@
+Playstore release checklist probs
+
+
+Release is currently configured to use debug signing in build.gradle.kts.
+Play submission should use your own upload/release keystore, not debug signing.
+App id is still the default example id in build.gradle.kts (com.example.client_flutter).
+You should switch to your real unique package name before publishing.
+You request location permissions in AndroidManifest.xml.
+That means Play Console policy forms and Data safety declarations must be accurate, and you will likely need a privacy policy URL.
+Static analysis currently reports 101 issues (mostly deprecations, plus a few warnings).
+Not always a hard Play blocker, but it increases release risk and review friction.

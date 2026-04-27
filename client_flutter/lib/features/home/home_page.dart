@@ -8,6 +8,7 @@ import '../../models/alert.dart';
 import '../alerts/data/alerts_repository.dart';
 import '../alerts/users_received_alerts_provider.dart';
 import 'widgets/alert_details_bottom_sheet.dart';
+import 'widgets/alerts_map_sliver.dart';
 
 // ─── category helpers ─────────────────────────────────────────────────────────
 
@@ -185,88 +186,90 @@ class _HomePageState extends ConsumerState<HomePage>
     return SafeArea(
       child: Column(
         children: [
-          // ── scrollable content ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── hero banner ───────────────────────────────────────────
+                _HeroBanner(),
+                const SizedBox(height: 20),
+
+                // ── feed / map toggle ─────────────────────────────────────
+                _TabToggle(controller: _tabController),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+
+          // ── tab content ──────────────────────────────────────────────────
           Expanded(
-            child: RefreshIndicator(
-              color: AppColors.primary,
-              onRefresh:
-                  () => ref.read(usersReceivedAlertsProvider.notifier).reload(),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ── hero banner ───────────────────────────────────
-                          _HeroBanner(),
-                          const SizedBox(height: 20),
-
-                          // ── feed / map toggle ─────────────────────────────
-                          _TabToggle(controller: _tabController),
-                          const SizedBox(height: 16),
-
-                          // ── filter chips ──────────────────────────────────
-                          // if (_tabController.index == 0) ...[
-                          //   _FilterRow(
-                          //     active: _activeFilter,
-                          //     onChanged:
-                          //         (f) => setState(() => _activeFilter = f),
-                          //   ),
-                          //   const SizedBox(height: 16),
-                          // ],
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── tab body ─────────────────────────────────────────────
-                  if (_tabController.index == 0)
-                    alertsAsync.when(
-                      loading:
-                          () => const SliverFillRemaining(
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                      error:
-                          (e, _) => SliverFillRemaining(
-                            child: Center(
-                              child: Text(
-                                'Failed to load alerts. $e',
-                                style: text.bodyMedium,
-                              ),
-                            ),
-                          ),
-                      data: (alerts) {
-                        _handlePendingDeepLink(alerts);
-                        return alerts.isEmpty
-                            ? SliverFillRemaining(
-                              child: Center(
-                                child: Text(
-                                  'No alerts in your area.',
-                                  style: text.bodyMedium?.copyWith(
-                                    color: AppColors.neutral,
+            child:
+                _tabController.index == 0
+                    ? RefreshIndicator(
+                      color: AppColors.primary,
+                      onRefresh:
+                          () =>
+                              ref
+                                  .read(usersReceivedAlertsProvider.notifier)
+                                  .reload(),
+                      child: CustomScrollView(
+                        slivers: [
+                          // ── feed body ────────────────────────────────────
+                          alertsAsync.when(
+                            loading:
+                                () => const SliverFillRemaining(
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
                                   ),
                                 ),
-                              ),
-                            )
-                            : SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                              sliver: SliverList.separated(
-                                itemCount: alerts.length,
-                                separatorBuilder:
-                                    (_, __) => const SizedBox(height: 12),
-                                itemBuilder:
-                                    (_, i) => _AlertCard(alert: alerts[i]),
-                              ),
-                            );
-                      },
+                            error:
+                                (e, _) => SliverFillRemaining(
+                                  child: Center(
+                                    child: Text(
+                                      'Failed to load alerts. $e',
+                                      style: text.bodyMedium,
+                                    ),
+                                  ),
+                                ),
+                            data: (alerts) {
+                              _handlePendingDeepLink(alerts);
+                              return alerts.isEmpty
+                                  ? SliverFillRemaining(
+                                    child: Center(
+                                      child: Text(
+                                        'No alerts in your area.',
+                                        style: text.bodyMedium?.copyWith(
+                                          color: AppColors.neutral,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  : SliverPadding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      24,
+                                    ),
+                                    sliver: SliverList.separated(
+                                      itemCount: alerts.length,
+                                      separatorBuilder:
+                                          (_, __) => const SizedBox(height: 12),
+                                      itemBuilder:
+                                          (_, i) =>
+                                              _AlertCard(alert: alerts[i]),
+                                    ),
+                                  );
+                            },
+                          ),
+                        ],
+                      ),
                     )
-                  else
-                    const _MapPlaceholder(),
-                ],
-              ),
-            ),
+                    : const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: AlertsMapView(),
+                    ),
           ),
         ],
       ),
@@ -656,50 +659,6 @@ class _AlertCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── map placeholder ─────────────────────────────────────────────────────────
-
-class _MapPlaceholder extends StatelessWidget {
-  const _MapPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return SliverFillRemaining(
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: AppColors.secondary.withOpacity(0.40),
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.map_outlined,
-              size: 56,
-              color: AppColors.secondary.withOpacity(0.6),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Map View',
-              style: text.titleLarge?.copyWith(color: AppColors.neutral),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Work in progress',
-              style: text.bodyMedium?.copyWith(color: AppColors.neutral),
-            ),
-          ],
         ),
       ),
     );
