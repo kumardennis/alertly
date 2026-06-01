@@ -45,7 +45,7 @@ function App() {
   const [otpRequested, setOtpRequested] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<AlertStatus>("pending");
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [flaggedOnly, setFlaggedOnly] = useState(true);
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

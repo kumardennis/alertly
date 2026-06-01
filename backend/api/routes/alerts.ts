@@ -36,7 +36,6 @@ type ReviewBody = {
 
 type ModerationQueueQuery = {
   status?: AlertStatus;
-  flagged?: string;
   limit?: string;
 };
 
@@ -206,7 +205,6 @@ export default async function alertRoutes(app: FastifyInstance) {
         await requireModerator(request.headers.authorization);
 
         const status = request.query.status ?? AlertStatus.pending;
-        const flagged = parseBool(request.query.flagged);
         const parsedLimit = Number(request.query.limit ?? "50");
         const limit = Number.isFinite(parsedLimit)
           ? Math.max(1, Math.min(parsedLimit, 200))
@@ -214,7 +212,7 @@ export default async function alertRoutes(app: FastifyInstance) {
 
         const filters = {
           status,
-          ...(flagged !== undefined ? { flagged } : {}),
+          flagged: true,
         };
 
         const alerts = await getAlerts(filters, getSupabaseServiceClient());
