@@ -14,7 +14,7 @@ export const getUser = async (
   const db = client ?? supabaseClient;
   const { data, error } = await db
     .from("users")
-    .select("*, role:roles(*)") // Fetch related role information
+    .select("*, role:roles!users_role_fkey(*)") // Fetch related role information
     .match(filters);
 
   if (error) {
@@ -31,7 +31,7 @@ export const createUser = async (userData: UserInsert) => {
   const { data, error } = await supabaseClient
     .from("users")
     .insert(userData)
-    .select("*, role:roles(*)") // Fetch related role information
+    .select("*, role:roles!users_role_fkey(*)") // Fetch related role information
     .single();
 
   if (error) {
@@ -49,7 +49,7 @@ export const updateUser = async (userData: UserUpdate) => {
     .from("users")
     .update(userData)
     .eq("id", Number(userData.id))
-    .select("*, role:roles(*)") // Fetch related role information
+    .select("*, role:roles!users_role_fkey(*)") // Fetch related role information
     .single();
 
   if (error) {

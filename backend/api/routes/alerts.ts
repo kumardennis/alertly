@@ -74,11 +74,14 @@ async function requireModerator(
   const appUser = users?.[0] as
     | {
         id: number;
-        role?: { role?: string | null } | null;
+        role?: { role?: string | null } | string | null;
       }
     | undefined;
 
-  const roleName = appUser?.role?.role?.toLowerCase().trim();
+  const roleName =
+    typeof appUser?.role === "string"
+      ? appUser.role.toLowerCase().trim()
+      : appUser?.role?.role?.toLowerCase().trim();
   if (!appUser?.id || !roleName || !MODERATOR_ROLES.has(roleName)) {
     throw new Error("FORBIDDEN");
   }
