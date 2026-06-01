@@ -273,9 +273,18 @@ export default async function alertRoutes(app: FastifyInstance) {
         });
       }
 
+      const currentAlert = alertData[0];
+      const updateData =
+        status === AlertStatus.published
+          ? currentAlert.status === AlertStatus.pending ||
+            currentAlert.status === AlertStatus.rejected
+            ? { status: AlertStatus.published, flagged: false }
+            : { flagged: true }
+          : { status, flagged };
+
       const data = await updateAlert(
         Number(alertId),
-        { status, flagged },
+        updateData,
         serviceClient,
       );
 
