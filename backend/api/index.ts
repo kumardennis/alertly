@@ -1,5 +1,6 @@
 import "dotenv/config";
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 
 import { hasRedisConfig } from "./lib/redis";
 import { startAlertWorker, stopAlertWorker } from "./queues/alertQueue";
@@ -12,6 +13,16 @@ import webhooksRoutes from "./routes/webhooks";
 export function buildApp() {
   const app = Fastify({
     logger: true,
+  });
+
+  const corsOrigins = process.env.CORS_ORIGINS?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  void app.register(cors, {
+    origin:
+      corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true,
   });
 
   app.get("/health", async () => ({ status: "ok" }));

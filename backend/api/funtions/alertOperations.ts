@@ -5,14 +5,18 @@ import { Database } from "../types/supabaseTypes";
 
 const supabaseClient = getSupabaseClient();
 
-export const getAlerts = async (filters: AlertFilters) => {
+export const getAlerts = async (
+  filters: AlertFilters,
+  client?: SupabaseClient<Database>,
+) => {
   // Fetch alerts from the database and return them
 
-  const { data, error } = await supabaseClient
+  const db = client ?? supabaseClient;
+  const { data, error } = await db
     .from("alerts")
     .select("*, user:users(*), tierInfo:tiers(*)")
     .match(filters)
-    .order("published_at", { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Error fetching alerts:", error);

@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:259936288609:android:b56e5f74f5efdaaa2a8f20",
+        "android_client_info": {
+          "package_name": "com.alertly.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdyOiQdx1hsIyejmkOvrL4jToopWWEJn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:259936288609:android:f361aeea3c4505fc2a8f20",
         "android_client_info": {
           "package_name": "com.example.client_flutter"

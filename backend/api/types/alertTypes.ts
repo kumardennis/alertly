@@ -20,7 +20,7 @@ export type AlertWithRelations = Alert & {
 
 export type AlertFilters = {
   category?: string;
-  status?: number;
+  status?: AlertStatus;
   user_id?: number;
   flagged?: boolean;
   id?: number;

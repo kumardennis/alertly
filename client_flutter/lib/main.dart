@@ -84,32 +84,35 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      scaffoldMessengerKey: rootScaffoldMessengerKey,
-      title: 'Alertly',
-      theme: AppTheme.light(),
-      builder: (context, child) {
-        final content = child ?? const SizedBox.shrink();
+    return SafeArea(
+      child: MaterialApp.router(
+        scaffoldMessengerKey: rootScaffoldMessengerKey,
+        debugShowCheckedModeBanner: false,
+        title: 'Alertly',
+        theme: AppTheme.light(),
+        builder: (context, child) {
+          final content = child ?? const SizedBox.shrink();
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth <= _portraitTabletMaxWidth) {
-              return content;
-            }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth <= _portraitTabletMaxWidth) {
+                return content;
+              }
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _portraitTabletMaxWidth,
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: _portraitTabletMaxWidth,
+                  ),
+                  child: content,
                 ),
-                child: content,
-              ),
-            );
-          },
-        );
-      },
-      routerConfig: router,
+              );
+            },
+          );
+        },
+        routerConfig: router,
+      ),
     );
   }
 }

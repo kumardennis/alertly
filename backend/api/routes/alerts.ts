@@ -34,6 +34,58 @@ type ReviewBody = {
   flagged?: boolean;
 };
 
+type ModerationQueueQuery = {
+  status?: AlertStatus;
+  flagged?: string;
+  limit?: string;
+};
+
+const MODERATOR_ROLES = new Set(["moderator", "admin", "municipality"]);
+
+function parseBool(value: string | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
+
+async function requireModerator(
+  authorizationHeader: string | undefined,
+): Promise<{ authId: string; userId: number }> {
+  const jwt = authorizationHeader?.startsWith("Bearer ")
+    ? authorizationHeader.slice(7)
+    : undefined;
+
+  if (!jwt) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const authedClient = getAuthedSupabaseClient(jwt);
+  const {
+    data: { user: authUser },
+    error: authError,
+  } = await authedClient.auth.getUser();
+
+  if (authError || !authUser?.id) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const users = await getUser({ auth_id: authUser.id }, authedClient);
+  const appUser = users?.[0] as
+    | {
+        id: number;
+        role?: { role?: string | null } | null;
+      }
+    | undefined;
+
+  const roleName = appUser?.role?.role?.toLowerCase().trim();
+  if (!appUser?.id || !roleName || !MODERATOR_ROLES.has(roleName)) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return { authId: authUser.id, userId: appUser.id };
+}
+
 export default async function alertRoutes(app: FastifyInstance) {
   app.post<{ Body: AlertBody }>("/submit", async (request, reply) => {
     const { title, message, userId, category } = request.body ?? {};
@@ -144,6 +196,46 @@ export default async function alertRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get<{ Querystring: ModerationQueueQuery }>(
+    "/moderation/queue",
+    async (request, reply) => {
+      try {
+        await requireModerator(request.headers.authorization);
+
+        const status = request.query.status ?? AlertStatus.pending;
+        const flagged = parseBool(request.query.flagged);
+        const parsedLimit = Number(request.query.limit ?? "50");
+        const limit = Number.isFinite(parsedLimit)
+          ? Math.max(1, Math.min(parsedLimit, 200))
+          : 50;
+
+        const filters = {
+          status,
+          ...(flagged !== undefined ? { flagged } : {}),
+        };
+
+        const alerts = await getAlerts(filters, getSupabaseServiceClient());
+
+        return reply.code(200).send({
+          count: Math.min(alerts.length, limit),
+          alerts: alerts.slice(0, limit),
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "UNAUTHORIZED") {
+          return reply.code(401).send({ error: "authentication required" });
+        }
+        if (error instanceof Error && error.message === "FORBIDDEN") {
+          return reply.code(403).send({ error: "moderator access required" });
+        }
+
+        request.log.error(error);
+        return reply.code(500).send({
+          error: "unable to fetch moderation queue",
+        });
+      }
+    },
+  );
+
   app.patch<{ Body: ReviewBody }>("/review", async (request, reply) => {
     const { alertId, status, flagged } = request.body ?? {};
 
@@ -153,9 +245,25 @@ export default async function alertRoutes(app: FastifyInstance) {
       });
     }
 
+    if (!status) {
+      return reply.code(400).send({
+        error: "status is required",
+      });
+    }
+
+    const validStatuses = new Set(Object.values(AlertStatus));
+    if (!validStatuses.has(status)) {
+      return reply.code(400).send({
+        error: "invalid status",
+      });
+    }
+
     try {
+      await requireModerator(request.headers.authorization);
+
       // Get alert data from supabase
-      const alertData = await getAlerts({ id: Number(alertId) });
+      const serviceClient = getSupabaseServiceClient();
+      const alertData = await getAlerts({ id: Number(alertId) }, serviceClient);
 
       // Update status in supabase
       if (!alertData?.[0]) {
@@ -164,7 +272,11 @@ export default async function alertRoutes(app: FastifyInstance) {
         });
       }
 
-      const data = await updateAlert(Number(alertId), { status, flagged });
+      const data = await updateAlert(
+        Number(alertId),
+        { status, flagged },
+        serviceClient,
+      );
 
       return reply.code(201).send({
         message: "alert reviewed successfully",
@@ -174,6 +286,13 @@ export default async function alertRoutes(app: FastifyInstance) {
         },
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "UNAUTHORIZED") {
+        return reply.code(401).send({ error: "authentication required" });
+      }
+      if (error instanceof Error && error.message === "FORBIDDEN") {
+        return reply.code(403).send({ error: "moderator access required" });
+      }
+
       request.log.error(error);
       return reply.code(500).send({
         error: "unable to review alert",
