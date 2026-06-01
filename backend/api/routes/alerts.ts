@@ -40,7 +40,7 @@ type ModerationQueueQuery = {
   limit?: string;
 };
 
-const MODERATOR_ROLES = new Set(["moderator", "admin", "municipality"]);
+const MODERATOR_ROLES = new Set(["verified", "municipality", "admin"]);
 
 function parseBool(value: string | undefined): boolean | undefined {
   if (value == null) return undefined;

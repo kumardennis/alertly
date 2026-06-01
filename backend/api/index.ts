@@ -20,8 +20,7 @@ export function buildApp() {
     .filter(Boolean);
 
   void app.register(cors, {
-    origin:
-      corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
   });
 

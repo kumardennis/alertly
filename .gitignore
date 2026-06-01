@@ -26,3 +26,5 @@ client_flutter/pubspec.lock
 dist/
 coverage/
 .env.local
+moderator_dashboard/.env.example
+moderator_dashboard/.env
