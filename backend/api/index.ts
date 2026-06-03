@@ -11,7 +11,11 @@ import alertRoutes from "./routes/alerts";
 import webhooksRoutes from "./routes/webhooks";
 
 function normalizeOrigin(origin: string) {
-  return origin.trim().toLowerCase().replace(/\/+$/, "");
+  return origin
+    .trim()
+    .replace(/^['\"]|['\"]$/g, "")
+    .toLowerCase()
+    .replace(/\/+$/, "");
 }
 
 function matchesOrigin(origin: string, allowedPattern: string) {
@@ -55,6 +59,9 @@ export function buildApp() {
       callback(null, isAllowed);
     },
     credentials: true,
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-webhook-secret"],
+    maxAge: 86400,
   });
 
   app.get("/health", async () => ({ status: "ok" }));
