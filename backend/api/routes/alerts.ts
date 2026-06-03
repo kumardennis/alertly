@@ -274,11 +274,22 @@ export default async function alertRoutes(app: FastifyInstance) {
       }
 
       const currentAlert = alertData[0];
+      const shouldSetPublishedAt =
+        status === AlertStatus.published &&
+        (currentAlert.status === AlertStatus.pending ||
+          currentAlert.status === AlertStatus.rejected) &&
+        !currentAlert.published_at;
       const updateData =
         status === AlertStatus.published
           ? currentAlert.status === AlertStatus.pending ||
             currentAlert.status === AlertStatus.rejected
-            ? { status: AlertStatus.published, flagged: false }
+            ? {
+                status: AlertStatus.published,
+                flagged: false,
+                ...(shouldSetPublishedAt
+                  ? { published_at: new Date().toISOString() }
+                  : {}),
+              }
             : { flagged: true }
           : { status, flagged };
 
