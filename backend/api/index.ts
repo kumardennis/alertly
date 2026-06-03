@@ -10,17 +10,50 @@ import queueRoutes from "./routes/queue";
 import alertRoutes from "./routes/alerts";
 import webhooksRoutes from "./routes/webhooks";
 
+function normalizeOrigin(origin: string) {
+  return origin.trim().toLowerCase().replace(/\/+$/, "");
+}
+
+function matchesOrigin(origin: string, allowedPattern: string) {
+  if (!allowedPattern.includes("*")) {
+    return origin === allowedPattern;
+  }
+
+  const escapedPattern = allowedPattern
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+
+  return new RegExp(`^${escapedPattern}$`).test(origin);
+}
+
 export function buildApp() {
   const app = Fastify({
     logger: true,
   });
 
   const corsOrigins = process.env.CORS_ORIGINS?.split(",")
-    .map((origin) => origin.trim())
+    .map((origin) => normalizeOrigin(origin))
     .filter(Boolean);
 
   void app.register(cors, {
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (!corsOrigins || corsOrigins.length === 0) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedRequestOrigin = normalizeOrigin(origin);
+      const isAllowed = corsOrigins.some((allowedOrigin) =>
+        matchesOrigin(normalizedRequestOrigin, allowedOrigin),
+      );
+
+      callback(null, isAllowed);
+    },
     credentials: true,
   });
 

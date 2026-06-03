@@ -55,9 +55,12 @@ class _AlertsPageState extends ConsumerState<AlertsPage> {
   String _category = 'emergency';
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _titleFocusNode = FocusNode();
+  final _bodyFocusNode = FocusNode();
   final _radiusController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
+  bool _isHandlingTitleOverflow = false;
 
   bool _submitting = false;
   String? _error;
@@ -74,10 +77,43 @@ class _AlertsPageState extends ConsumerState<AlertsPage> {
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _titleFocusNode.dispose();
+    _bodyFocusNode.dispose();
     _radiusController.dispose();
     _latController.dispose();
     _lngController.dispose();
     super.dispose();
+  }
+
+  void _handleTitleChanged(String rawTitle) {
+    if (_isHandlingTitleOverflow) {
+      return;
+    }
+
+    setState(() => _error = null);
+
+    if (rawTitle.length <= 40) {
+      return;
+    }
+
+    final cappedTitle = rawTitle.substring(0, 40);
+    _isHandlingTitleOverflow = true;
+
+    _titleController.value = TextEditingValue(
+      text: cappedTitle,
+      selection: TextSelection.collapsed(offset: cappedTitle.length),
+    );
+    _bodyController.value = TextEditingValue(
+      text: rawTitle,
+      selection: TextSelection.collapsed(offset: rawTitle.length),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _bodyFocusNode.requestFocus();
+      }
+      _isHandlingTitleOverflow = false;
+    });
   }
 
   bool get _stepValid {
@@ -326,15 +362,17 @@ class _AlertsPageState extends ConsumerState<AlertsPage> {
                 label: 'Title',
                 hint: 'Short description of the incident',
                 controller: _titleController,
+                focusNode: _titleFocusNode,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => setState(() => _error = null),
+                onChanged: _handleTitleChanged,
               ),
               const SizedBox(height: 14),
               _LabeledField(
                 label: 'Details (optional)',
                 hint: 'Add more context for your neighbours…',
                 controller: _bodyController,
+                focusNode: _bodyFocusNode,
                 maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
                 onChanged: (_) {},
@@ -751,6 +789,7 @@ class _LabeledField extends StatelessWidget {
     required this.hint,
     required this.controller,
     required this.onChanged,
+    this.focusNode,
     this.keyboardType,
     this.textInputAction,
     this.textCapitalization = TextCapitalization.none,
@@ -763,6 +802,7 @@ class _LabeledField extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final TextCapitalization textCapitalization;
@@ -785,6 +825,7 @@ class _LabeledField extends StatelessWidget {
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           onChanged: onChanged,
           readOnly: readOnly,
           keyboardType: keyboardType,

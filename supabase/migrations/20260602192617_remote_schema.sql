@@ -706,6 +706,34 @@ using (true)
 with check (true);
 
 
-CREATE TRIGGER alert_status AFTER INSERT OR UPDATE ON public.alerts FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://alertly-backend-api-server.onrender.com/api/webhooks/alerts-status', 'POST', '{"Content-type":"application/json"}', '{}', '5000');
+-- Ensure pg_net exists
+create extension if not exists pg_net with schema extensions;
 
+-- Trigger function
+create or replace function public.notify_alert_status()
+returns trigger
+language plpgsql
+as $$
+begin
+  perform net.http_post(
+    url := 'https://alertly-backend-api-server.onrender.com/api/webhooks/alerts-status',
+    body := jsonb_build_object(
+      'type', TG_OP,
+      'table', TG_TABLE_NAME,
+      'schema', TG_TABLE_SCHEMA,
+      'record', to_jsonb(NEW),
+      'old_record', case when TG_OP = 'UPDATE' then to_jsonb(OLD) else null end
+    ),
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    timeout_milliseconds := 5000
+  );
+  return NEW;
+end;
+$$;
 
+-- Recreate trigger
+drop trigger if exists alert_status on public.alerts;
+create trigger alert_status
+after insert or update on public.alerts
+for each row
+execute function public.notify_alert_status();

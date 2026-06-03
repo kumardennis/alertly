@@ -1,7 +1,7 @@
 name: alertly
 description: "Alertly - Community alert platform."
-publish_to: 'none'
-version: 0.2.0
+publish_to: "none"
+version: 0.3.0+3
 
 environment:
   sdk: ^3.7.0
