@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/location/location_provider.dart';
 import '../../core/supabase/supabase_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/alert.dart';
 import '../alerts/data/alerts_repository.dart';
 import '../alerts/users_received_alerts_provider.dart';
+import '../users/profile_provider.dart';
 import 'widgets/alert_details_bottom_sheet.dart';
 import 'widgets/alerts_map_sliver.dart';
 
@@ -87,6 +89,8 @@ class _HomePageState extends ConsumerState<HomePage>
   _Filter _activeFilter = _Filter.district;
   int? _pendingDeepLinkAlertId;
   bool _handlingDeepLink = false;
+  bool _locationSyncInFlight = false;
+  bool _locationSyncQueued = false;
 
   @override
   void initState() {
@@ -178,10 +182,45 @@ class _HomePageState extends ConsumerState<HomePage>
     });
   }
 
+  void _queueLocationSyncOnRender(int userId) {
+    if (_locationSyncQueued) {
+      return;
+    }
+
+    _locationSyncQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _locationSyncQueued = false;
+      if (!mounted) return;
+      _syncLocationOnRender(userId);
+    });
+  }
+
+  Future<void> _syncLocationOnRender(int userId) async {
+    if (_locationSyncInFlight) {
+      return;
+    }
+
+    _locationSyncInFlight = true;
+    try {
+      await ref
+          .read(locationProvider.notifier)
+          .refreshAndSyncUserLocation(userId);
+    } catch (error, stackTrace) {
+      debugPrint('Home render location sync failed: $error\n$stackTrace');
+    } finally {
+      _locationSyncInFlight = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final alertsAsync = ref.watch(usersReceivedAlertsProvider);
+    final profile = ref.watch(profileProvider).valueOrNull;
+
+    if (profile != null) {
+      _queueLocationSyncOnRender(profile.id);
+    }
 
     return SafeArea(
       child: Column(

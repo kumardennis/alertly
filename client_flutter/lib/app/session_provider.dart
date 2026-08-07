@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -55,16 +56,18 @@ class SessionNotifier extends Notifier<Session?> {
 
     try {
       await _syncDeviceForUser(userId);
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Device token sync should not block successful authentication.
+      debugPrint('Device sync failed: $error\n$stackTrace');
     }
 
     try {
       await ref
           .read(locationProvider.notifier)
           .refreshAndSyncUserLocation(userId);
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Location sync is best-effort and should never block session state.
+      debugPrint('Location sync failed: $error\n$stackTrace');
     }
   }
 

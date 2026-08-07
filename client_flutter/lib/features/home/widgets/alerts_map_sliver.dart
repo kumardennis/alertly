@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' as rendering;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
@@ -57,6 +58,9 @@ class _MapboxViewport extends ConsumerStatefulWidget {
 }
 
 class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
+  static const int _markerWidth = 88;
+  static const int _markerHeight = 102;
+
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _alertsAnnotationManager;
   Uint8List? _markerBitmap;
@@ -253,37 +257,20 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
   }
 
   static Future<Uint8List> _drawPinBitmap(Color fill) async {
-    const double w = 88.0;
-    const double h = 112.0;
-    const double r = 32.0;
-    const double stroke = 5.0;
-    const double cx = w / 2;
-    const double cy = r + stroke + 2;
-
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
-
-    final path =
-        Path()
-          ..addOval(Rect.fromCircle(center: Offset(cx, cy), radius: r))
-          ..moveTo(cx - 18, cy + r - 10)
-          ..lineTo(cx + 18, cy + r - 10)
-          ..lineTo(cx, h - stroke)
-          ..close();
-
-    canvas.drawPath(path, Paint()..color = fill);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeJoin = StrokeJoin.round,
+    final canvas = ui.Canvas(
+      recorder,
+      ui.Rect.fromLTWH(0, 0, _markerWidth.toDouble(), _markerHeight.toDouble()),
     );
-    canvas.drawCircle(Offset(cx, cy), 11.0, Paint()..color = Colors.white);
+
+    final painter = _AlertPinPainter(fill: fill);
+    painter.paint(
+      canvas,
+      ui.Size(_markerWidth.toDouble(), _markerHeight.toDouble()),
+    );
 
     final picture = recorder.endRecording();
-    final image = await picture.toImage(w.toInt(), h.toInt());
+    final image = await picture.toImage(_markerWidth, _markerHeight);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     return bytes!.buffer.asUint8List();
   }
@@ -330,7 +317,7 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
         await _mapboxMap!.style.addStyleImage(
           _markerImageId,
           1.0,
-          MbxImage(width: 88, height: 112, data: bitmap),
+          MbxImage(width: _markerWidth, height: _markerHeight, data: bitmap),
           false,
           [],
           [],
@@ -553,6 +540,104 @@ class _AlertMarker {
   final int alertId;
   final double latitude;
   final double longitude;
+}
+
+class _AlertPinPainter extends rendering.CustomPainter {
+  const _AlertPinPainter({required this.fill});
+
+  final Color fill;
+
+  @override
+  void paint(ui.Canvas canvas, ui.Size size) {
+    final cardWidth = size.width - 8;
+    final cardHeight = size.height * 0.68;
+    final cardLeft = (size.width - cardWidth) / 2;
+    const cardTop = 4.0;
+    final cardRect = ui.Rect.fromLTWH(cardLeft, cardTop, cardWidth, cardHeight);
+    final cardRRect = ui.RRect.fromRectAndRadius(
+      cardRect,
+      const ui.Radius.circular(14),
+    );
+
+    final tipY = size.height - 6;
+    final pointerHalfWidth = 10.0;
+    final pointerTopY = cardRect.bottom - 1;
+    final centerX = size.width / 2;
+
+    final pointerPath =
+        ui.Path()
+          ..moveTo(centerX - pointerHalfWidth, pointerTopY)
+          ..lineTo(centerX + pointerHalfWidth, pointerTopY)
+          ..lineTo(centerX, tipY)
+          ..close();
+
+    final shadowPaint =
+        ui.Paint()
+          ..color = AppColors.ink.withOpacity(0.22)
+          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 8);
+    canvas.drawRRect(cardRRect.shift(const ui.Offset(0, 3)), shadowPaint);
+    canvas.drawPath(pointerPath.shift(const ui.Offset(0, 3)), shadowPaint);
+
+    final cardPaint =
+        ui.Paint()
+          ..shader = ui.Gradient.linear(
+            ui.Offset(cardRect.left, cardRect.top),
+            ui.Offset(cardRect.right, cardRect.bottom),
+            [fill.withOpacity(0.98), AppColors.primaryDark],
+          );
+    canvas.drawRRect(cardRRect, cardPaint);
+    canvas.drawPath(pointerPath, cardPaint);
+
+    final borderPaint =
+        ui.Paint()
+          ..color = Colors.white
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 3;
+    canvas.drawRRect(cardRRect, borderPaint);
+    canvas.drawPath(pointerPath, borderPaint);
+
+    final iconBg = ui.Paint()..color = Colors.white;
+    final iconCenter = ui.Offset(
+      centerX,
+      cardRect.top + cardRect.height * 0.38,
+    );
+    canvas.drawCircle(iconCenter, 14, iconBg);
+
+    final iconPaint = ui.Paint()..color = AppColors.primaryDark;
+    final dotRect = ui.RRect.fromRectAndRadius(
+      ui.Rect.fromCenter(
+        center: ui.Offset(iconCenter.dx, iconCenter.dy - 2),
+        width: 4,
+        height: 10,
+      ),
+      const ui.Radius.circular(2),
+    );
+    canvas.drawRRect(dotRect, iconPaint);
+    canvas.drawCircle(
+      ui.Offset(iconCenter.dx, iconCenter.dy + 7),
+      2.6,
+      iconPaint,
+    );
+
+    final shinePaint = ui.Paint()..color = Colors.white.withOpacity(0.16);
+    canvas.drawRRect(
+      ui.RRect.fromRectAndRadius(
+        ui.Rect.fromLTWH(
+          cardRect.left + 8,
+          cardRect.top + 7,
+          cardRect.width - 16,
+          9,
+        ),
+        const ui.Radius.circular(5),
+      ),
+      shinePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AlertPinPainter oldDelegate) {
+    return oldDelegate.fill != fill;
+  }
 }
 
 class _MapboxSetupNotice extends StatelessWidget {

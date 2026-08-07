@@ -21,12 +21,13 @@ class UserLocation {
 }
 
 class LocationNotifier extends AsyncNotifier<UserLocation?> {
-  late final UsersRepository _usersRepo;
+  UsersRepository get _usersRepo {
+    final client = ref.read(supabaseClientProvider);
+    return UsersRepository(client);
+  }
 
   @override
   Future<UserLocation?> build() async {
-    final client = ref.watch(supabaseClientProvider);
-    _usersRepo = UsersRepository(client);
     return null;
   }
 
@@ -64,13 +65,21 @@ class LocationNotifier extends AsyncNotifier<UserLocation?> {
   Future<UserLocation?> refreshAndSyncUserLocation(int userId) async {
     final location = await refreshCurrentLocation();
 
-    await _usersRepo.updateUsers(
+    final updatedUsers = await _usersRepo.updateUsers(
       payload: {
-        'location': 'POINT(${location.longitude} ${location.latitude})',
+        'location':
+            'SRID=4326;POINT(${location.longitude} ${location.latitude})',
         'location_updated_at': location.capturedAt.toIso8601String(),
       },
       filters: {'id': userId},
     );
+
+    if (updatedUsers.isEmpty) {
+      throw Exception(
+        'Location sync updated 0 rows for user $userId. '
+        'Check users.auth_id mapping and RLS update policy.',
+      );
+    }
 
     return location;
   }
