@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/maps/alert_map_marker.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/supabase/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -55,25 +57,14 @@ class _AlertDetailsBottomSheetState
     }
   }
 
-  String _locationLabel(DateTime reportedAt) {
-    final timeLabel = 'Reported ${_timeAgo(reportedAt)}';
-
+  String _reportedLabel(DateTime reportedAt) {
     if (_loadingCoordinates) {
-      return 'Locating... • $timeLabel';
+      return 'Locating… • Reported ${_timeAgo(reportedAt)}';
     }
-
-    final coordinates = _coordinates;
-    if (coordinates == null) {
-      return 'District • $timeLabel';
+    if (_coordinates == null) {
+      return 'Location unavailable • Reported ${_timeAgo(reportedAt)}';
     }
-
-    final lat = coordinates['latitude'];
-    final lng = coordinates['longitude'];
-    if (lat == null || lng == null) {
-      return 'District • $timeLabel';
-    }
-
-    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)} • $timeLabel';
+    return 'Reported ${_timeAgo(reportedAt)}';
   }
 
   Future<void> _openCoordinatesInMaps() async {
@@ -164,141 +155,12 @@ class _AlertDetailsBottomSheetState
                 ),
               ),
               const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                height: 220,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primaryDark,
-                      alert.tier == 4 ? AppColors.danger : AppColors.primary,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.28),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: 10,
-                      top: 16,
-                      child: Container(
-                        width: 170,
-                        height: 170,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withOpacity(0.30),
-                          borderRadius: BorderRadius.circular(90),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: -20,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(70),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 56,
-                      top: -14,
-                      child: Container(
-                        width: 14,
-                        height: 250,
-                        color: AppColors.ink.withOpacity(0.22),
-                      ),
-                    ),
-                    Positioned(
-                      left: 98,
-                      top: -18,
-                      child: Container(
-                        width: 9,
-                        height: 260,
-                        color: AppColors.ink.withOpacity(0.22),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            alert.title ?? 'Untitled alert',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              height: 1.05,
-                            ),
-                          ),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap:
-                                (_coordinates == null || _loadingCoordinates)
-                                    ? null
-                                    : _openCoordinatesInMaps,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.location_on_rounded,
-                                  color:
-                                      _coordinates == null
-                                          ? Colors.white
-                                          : AppColors.secondary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    _locationLabel(reportedAt),
-                                    style: text.bodyLarge?.copyWith(
-                                      color: Colors.white.withOpacity(0.90),
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.28,
-                                      decoration:
-                                          _coordinates == null
-                                              ? TextDecoration.none
-                                              : TextDecoration.underline,
-                                      decorationColor: Colors.white.withOpacity(
-                                        0.85,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (_coordinates != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 6,
-                                      top: 2,
-                                    ),
-                                    child: Icon(
-                                      Icons.open_in_new_rounded,
-                                      size: 14,
-                                      color: Colors.white.withOpacity(0.90),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              _AlertLocationPreview(
+                alert: alert,
+                reportedLabel: _reportedLabel(reportedAt),
+                loadingCoordinates: _loadingCoordinates,
+                coordinates: _coordinates,
+                onOpenMaps: _openCoordinatesInMaps,
               ),
               const SizedBox(height: 16),
               Container(
@@ -814,6 +676,222 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AlertLocationPreview extends StatelessWidget {
+  const _AlertLocationPreview({
+    required this.alert,
+    required this.reportedLabel,
+    required this.loadingCoordinates,
+    required this.coordinates,
+    required this.onOpenMaps,
+  });
+
+  final Alert alert;
+  final String reportedLabel;
+  final bool loadingCoordinates;
+  final Map<String, double>? coordinates;
+  final VoidCallback onOpenMaps;
+
+  static const double _height = 220;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final canOpenMaps = coordinates != null && !loadingCoordinates;
+    final tierAccent = AlertMapMarkerStyle.tierColor(alert.tier);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: canOpenMaps ? onOpenMaps : null,
+        borderRadius: BorderRadius.circular(28),
+        child: Ink(
+          height: _height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: tierAccent.withValues(alpha: 0.22),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final dpr = MediaQuery.devicePixelRatioOf(context);
+                final mapWidth = constraints.maxWidth.round().clamp(1, 1280);
+                final mapHeight = _height.round();
+                final lat = coordinates?['latitude'];
+                final lng = coordinates?['longitude'];
+                final mapUrl =
+                    (lat != null &&
+                            lng != null &&
+                            AppConfig.hasMapboxAccessToken)
+                        ? buildAlertStaticMapUrl(
+                          latitude: lat,
+                          longitude: lng,
+                          width: mapWidth,
+                          height: mapHeight,
+                          pixelRatio: dpr,
+                        )
+                        : null;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildMapBackground(mapUrl: mapUrl, tierAccent: tierAccent),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x99000000),
+                            Color(0x40000000),
+                            Color(0xCC000000),
+                          ],
+                          stops: [0, 0.45, 1],
+                        ),
+                      ),
+                    ),
+                    if (!loadingCoordinates && coordinates != null)
+                      Center(
+                        child: IgnorePointer(
+                          child: PulsingAlertMapMarker(
+                            tier: alert.tier,
+                            category: alert.category,
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            alert.title ?? 'Untitled alert',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.headlineMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              height: 1.05,
+                              fontSize: 24,
+                            ),
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.near_me_rounded,
+                                size: 18,
+                                color:
+                                    canOpenMaps
+                                        ? AppColors.secondary
+                                        : Colors.white.withValues(alpha: 0.85),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  reportedLabel,
+                                  style: text.bodyMedium?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.92),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (canOpenMaps)
+                                Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 14,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '© Mapbox © OpenStreetMap',
+                            style: text.labelMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (loadingCoordinates)
+                      const ColoredBox(
+                        color: Color(0x33000000),
+                        child: Center(
+                          child: SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapBackground({
+    required String? mapUrl,
+    required Color tierAccent,
+  }) {
+    if (mapUrl == null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.primaryDark, tierAccent],
+          ),
+        ),
+      );
+    }
+
+    return Image.network(
+      mapUrl,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder:
+          (context, error, stackTrace) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.primaryDark, tierAccent],
+              ),
+            ),
+          ),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return ColoredBox(
+          color: AppColors.secondary.withValues(alpha: 0.35),
+          child: const Center(
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+          ),
+        );
+      },
     );
   }
 }

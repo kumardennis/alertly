@@ -138,6 +138,10 @@ function App() {
   const requestOtp = async (event: FormEvent) => {
     event.preventDefault();
 
+    if (authLoading) {
+      return;
+    }
+
     if (!normalizedPhone) {
       setError(
         "Enter a phone number in E.164 format, for example +37255123456.",

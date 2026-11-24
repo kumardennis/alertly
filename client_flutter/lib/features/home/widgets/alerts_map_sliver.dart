@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' as rendering;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/location/location_provider.dart';
+import '../../../core/maps/alert_map_marker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/alert.dart';
 import '../../alerts/alerts_provider.dart';
@@ -58,22 +56,18 @@ class _MapboxViewport extends ConsumerStatefulWidget {
 }
 
 class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
-  static const int _markerWidth = 88;
-  static const int _markerHeight = 102;
+  static const int _markerSize = AlertMapMarkerStyle.bitmapSize;
 
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _alertsAnnotationManager;
-  Uint8List? _markerBitmap;
+  final Set<String> _registeredMarkerImageIds = <String>{};
   UserLocation? _latestLocation;
   bool _requestedDeviceLocation = false;
   bool _centeredOnDevice = false;
   bool _resolvingDeviceLocation = false;
   bool _fetchingMapAlerts = false;
   bool _isStyleLoaded = false;
-  bool _markerImageRegistered = false;
   String _lastRenderedAlertsKey = '';
-
-  static const String _markerImageId = 'alert-pin';
 
   static final CameraOptions _initialCamera = CameraOptions(
     center: Point(coordinates: Position(-95.7129, 37.0902)),
@@ -251,28 +245,32 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
     );
   }
 
-  Future<Uint8List> _getMarkerBitmap() async {
-    _markerBitmap ??= await _drawPinBitmap(AppColors.primary);
-    return _markerBitmap!;
-  }
-
-  static Future<Uint8List> _drawPinBitmap(Color fill) async {
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(
-      recorder,
-      ui.Rect.fromLTWH(0, 0, _markerWidth.toDouble(), _markerHeight.toDouble()),
+  Future<void> _ensureMarkerImageRegistered({
+    required int? tier,
+    required String category,
+  }) async {
+    final imageId = AlertMapMarkerStyle.styleImageId(
+      tier: tier,
+      category: category,
     );
+    if (_registeredMarkerImageIds.contains(imageId) || _mapboxMap == null) {
+      return;
+    }
 
-    final painter = _AlertPinPainter(fill: fill);
-    painter.paint(
-      canvas,
-      ui.Size(_markerWidth.toDouble(), _markerHeight.toDouble()),
+    final bitmap = await drawAlertMapMarkerPng(
+      tier: tier,
+      category: category,
     );
-
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(_markerWidth, _markerHeight);
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    return bytes!.buffer.asUint8List();
+    await _mapboxMap!.style.addStyleImage(
+      imageId,
+      1.0,
+      MbxImage(width: _markerSize, height: _markerSize, data: bitmap),
+      false,
+      [],
+      [],
+      null,
+    );
+    _registeredMarkerImageIds.add(imageId);
   }
 
   Future<void> _syncAlertMarkers(List<Alert> alerts) async {
@@ -294,7 +292,8 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
     final renderedKey = markers
         .map(
           (marker) =>
-              '${marker.alertId}:${marker.longitude.toStringAsFixed(6)}:${marker.latitude.toStringAsFixed(6)}',
+              '${marker.alertId}:${marker.tier ?? 0}:${marker.category}:'
+              '${marker.longitude.toStringAsFixed(6)}:${marker.latitude.toStringAsFixed(6)}',
         )
         .join('|');
     if (renderedKey == _lastRenderedAlertsKey) {
@@ -310,20 +309,11 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
         return;
       }
 
-      // Register the bitmap under a stable named ID so Mapbox never
-      // garbage-collects the internal reference between renders.
-      if (!_markerImageRegistered) {
-        final bitmap = await _getMarkerBitmap();
-        await _mapboxMap!.style.addStyleImage(
-          _markerImageId,
-          1.0,
-          MbxImage(width: _markerWidth, height: _markerHeight, data: bitmap),
-          false,
-          [],
-          [],
-          null,
+      for (final marker in markers) {
+        await _ensureMarkerImageRegistered(
+          tier: marker.tier,
+          category: marker.category,
         );
-        _markerImageRegistered = true;
       }
 
       await manager.createMulti(
@@ -333,9 +323,12 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
                 geometry: Point(
                   coordinates: Position(marker.longitude, marker.latitude),
                 ),
-                iconImage: _markerImageId,
-                iconAnchor: IconAnchor.BOTTOM,
-                iconSize: 1.0,
+                iconImage: AlertMapMarkerStyle.styleImageId(
+                  tier: marker.tier,
+                  category: marker.category,
+                ),
+                iconAnchor: IconAnchor.CENTER,
+                iconSize: 0.92,
                 customData: {'alert_id': marker.alertId},
               ),
             )
@@ -361,6 +354,8 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
             alertId: alert.id,
             latitude: latitude!,
             longitude: longitude!,
+            tier: alert.tier,
+            category: alert.category,
           );
         }
       }
@@ -374,6 +369,8 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
           alertId: alert.id,
           latitude: latitude!,
           longitude: longitude!,
+          tier: alert.tier,
+          category: alert.category,
         );
       }
     }
@@ -391,6 +388,8 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
             alertId: alert.id,
             latitude: latitude!,
             longitude: longitude!,
+            tier: alert.tier,
+            category: alert.category,
           );
         }
       }
@@ -398,7 +397,6 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
 
     return null;
   }
-
   bool _isValidLatLng(double? latitude, double? longitude) {
     if (latitude == null || longitude == null) {
       return false;
@@ -426,7 +424,7 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
     if (map != null && manager != null) {
       unawaited(map.annotations.removeAnnotationManager(manager));
     }
-    _markerBitmap = null;
+    _registeredMarkerImageIds.clear();
     super.dispose();
   }
 
@@ -451,7 +449,7 @@ class _MapboxViewportState extends ConsumerState<_MapboxViewport> {
           onStyleLoadedListener: (_) {
             _isStyleLoaded = true;
             _lastRenderedAlertsKey = '';
-            _markerImageRegistered = false;
+            _registeredMarkerImageIds.clear();
             _alertsAnnotationManager = null;
           },
           onCameraChangeListener:
@@ -535,109 +533,15 @@ class _AlertMarker {
     required this.alertId,
     required this.latitude,
     required this.longitude,
+    required this.tier,
+    required this.category,
   });
 
   final int alertId;
   final double latitude;
   final double longitude;
-}
-
-class _AlertPinPainter extends rendering.CustomPainter {
-  const _AlertPinPainter({required this.fill});
-
-  final Color fill;
-
-  @override
-  void paint(ui.Canvas canvas, ui.Size size) {
-    final cardWidth = size.width - 8;
-    final cardHeight = size.height * 0.68;
-    final cardLeft = (size.width - cardWidth) / 2;
-    const cardTop = 4.0;
-    final cardRect = ui.Rect.fromLTWH(cardLeft, cardTop, cardWidth, cardHeight);
-    final cardRRect = ui.RRect.fromRectAndRadius(
-      cardRect,
-      const ui.Radius.circular(14),
-    );
-
-    final tipY = size.height - 6;
-    final pointerHalfWidth = 10.0;
-    final pointerTopY = cardRect.bottom - 1;
-    final centerX = size.width / 2;
-
-    final pointerPath =
-        ui.Path()
-          ..moveTo(centerX - pointerHalfWidth, pointerTopY)
-          ..lineTo(centerX + pointerHalfWidth, pointerTopY)
-          ..lineTo(centerX, tipY)
-          ..close();
-
-    final shadowPaint =
-        ui.Paint()
-          ..color = AppColors.ink.withOpacity(0.22)
-          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 8);
-    canvas.drawRRect(cardRRect.shift(const ui.Offset(0, 3)), shadowPaint);
-    canvas.drawPath(pointerPath.shift(const ui.Offset(0, 3)), shadowPaint);
-
-    final cardPaint =
-        ui.Paint()
-          ..shader = ui.Gradient.linear(
-            ui.Offset(cardRect.left, cardRect.top),
-            ui.Offset(cardRect.right, cardRect.bottom),
-            [fill.withOpacity(0.98), AppColors.primaryDark],
-          );
-    canvas.drawRRect(cardRRect, cardPaint);
-    canvas.drawPath(pointerPath, cardPaint);
-
-    final borderPaint =
-        ui.Paint()
-          ..color = Colors.white
-          ..style = ui.PaintingStyle.stroke
-          ..strokeWidth = 3;
-    canvas.drawRRect(cardRRect, borderPaint);
-    canvas.drawPath(pointerPath, borderPaint);
-
-    final iconBg = ui.Paint()..color = Colors.white;
-    final iconCenter = ui.Offset(
-      centerX,
-      cardRect.top + cardRect.height * 0.38,
-    );
-    canvas.drawCircle(iconCenter, 14, iconBg);
-
-    final iconPaint = ui.Paint()..color = AppColors.primaryDark;
-    final dotRect = ui.RRect.fromRectAndRadius(
-      ui.Rect.fromCenter(
-        center: ui.Offset(iconCenter.dx, iconCenter.dy - 2),
-        width: 4,
-        height: 10,
-      ),
-      const ui.Radius.circular(2),
-    );
-    canvas.drawRRect(dotRect, iconPaint);
-    canvas.drawCircle(
-      ui.Offset(iconCenter.dx, iconCenter.dy + 7),
-      2.6,
-      iconPaint,
-    );
-
-    final shinePaint = ui.Paint()..color = Colors.white.withOpacity(0.16);
-    canvas.drawRRect(
-      ui.RRect.fromRectAndRadius(
-        ui.Rect.fromLTWH(
-          cardRect.left + 8,
-          cardRect.top + 7,
-          cardRect.width - 16,
-          9,
-        ),
-        const ui.Radius.circular(5),
-      ),
-      shinePaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _AlertPinPainter oldDelegate) {
-    return oldDelegate.fill != fill;
-  }
+  final int? tier;
+  final String category;
 }
 
 class _MapboxSetupNotice extends StatelessWidget {

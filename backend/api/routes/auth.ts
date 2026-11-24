@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 
+import { getRedisClient, hasRedisConfig } from "../lib/redis";
 import { getSupabaseClient } from "../lib/supabase";
 import { createUser, getUser } from "../funtions/userOperations";
 
@@ -13,10 +14,48 @@ type VerifyBody = {
   token?: string;
 };
 
+const OTP_COOLDOWN_SECONDS = 60;
+const memoryOtpCooldowns = new Map<string, number>();
+
+function normalizePhone(phone: string) {
+  return phone.trim().replace(/[^\d+]/g, "");
+}
+
+async function claimOtpSendSlot(phone: string): Promise<boolean> {
+  const key = `otp:cooldown:${phone}`;
+
+  if (hasRedisConfig()) {
+    const result = await getRedisClient().set(
+      key,
+      "1",
+      "EX",
+      OTP_COOLDOWN_SECONDS,
+      "NX",
+    );
+    return result === "OK";
+  }
+
+  const now = Date.now();
+  const expiresAt = memoryOtpCooldowns.get(phone);
+  if (expiresAt && expiresAt > now) {
+    return false;
+  }
+
+  memoryOtpCooldowns.set(phone, now + OTP_COOLDOWN_SECONDS * 1000);
+  return true;
+}
+
 export default async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterBody }>("/register", async (request, reply) => {
-    const { phone, channel = "sms" } = request.body ?? {};
+    const { phone: rawPhone, channel = "sms" } = request.body ?? {};
 
+    if (!rawPhone) {
+      return reply.code(400).send({
+        error: "phone is required",
+      });
+    }
+
+    const phone = normalizePhone(rawPhone);
     if (!phone) {
       return reply.code(400).send({
         error: "phone is required",
@@ -24,6 +63,14 @@ export default async function authRoutes(app: FastifyInstance) {
     }
 
     try {
+      const allowed = await claimOtpSendSlot(phone);
+      if (!allowed) {
+        return reply.code(429).send({
+          error: `Please wait ${OTP_COOLDOWN_SECONDS}s before requesting another code.`,
+          retryAfterSeconds: OTP_COOLDOWN_SECONDS,
+        });
+      }
+
       const supabase = getSupabaseClient();
       const { error } = await supabase.auth.signInWithOtp({
         phone,

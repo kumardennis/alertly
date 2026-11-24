@@ -88,9 +88,13 @@ class ApiClient {
         response.body.isEmpty ? null : jsonDecode(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      final bodyMessage =
+          decodedBody is Map && decodedBody['error'] is String
+              ? decodedBody['error'] as String
+              : null;
       throw ApiException(
         statusCode: response.statusCode,
-        message: 'Request failed',
+        message: bodyMessage ?? 'Request failed',
         body: decodedBody,
       );
     }

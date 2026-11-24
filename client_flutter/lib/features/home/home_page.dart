@@ -61,11 +61,33 @@ String _severityLabel(Alert alert) {
 }
 
 String _timeAgo(DateTime dt) {
-  final diff = DateTime.now().toUtc().difference(dt.toUtc());
+  final now = DateTime.now();
+  final diff = now.toUtc().difference(dt.toUtc());
   if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
+  if (diff.inDays <= 5) return '${diff.inDays}d ago';
+
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final local = dt.toLocal();
+  final month = months[local.month - 1];
+  if (local.year == now.year) {
+    return 'since $month ${local.day}';
+  }
+  return 'since $month ${local.day}, ${local.year}';
 }
 
 // ─── filter enum ─────────────────────────────────────────────────────────────
@@ -549,6 +571,14 @@ class _AlertCard extends StatelessWidget {
     final label = _severityLabel(alert);
     final icon = _categoryIcon(alert.category);
     final timeText = _timeAgo(alert.publishedAt ?? alert.createdAt);
+    final verificationCount =
+        alert.verifications.where((item) => item.verified != false).length;
+    final verificationLabel =
+        verificationCount == 0
+            ? 'Not verified yet'
+            : verificationCount == 1
+            ? 'Verified · 1'
+            : 'Verified · $verificationCount';
 
     return Material(
       color: Colors.transparent,
@@ -668,17 +698,29 @@ class _AlertCard extends StatelessWidget {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.chat_bubble_outline_rounded,
+                            Icon(
+                              verificationCount == 0
+                                  ? Icons.shield_outlined
+                                  : Icons.verified_user_outlined,
                               size: 15,
-                              color: AppColors.neutral,
+                              color:
+                                  verificationCount == 0
+                                      ? AppColors.neutral
+                                      : AppColors.primary,
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              'Comments',
+                              verificationLabel,
                               style: text.bodyMedium?.copyWith(
-                                color: AppColors.neutral,
+                                color:
+                                    verificationCount == 0
+                                        ? AppColors.neutral
+                                        : AppColors.primary,
                                 fontSize: 12,
+                                fontWeight:
+                                    verificationCount == 0
+                                        ? FontWeight.w500
+                                        : FontWeight.w700,
                               ),
                             ),
                             const Spacer(),

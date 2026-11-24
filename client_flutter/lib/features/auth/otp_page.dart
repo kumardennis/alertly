@@ -16,11 +16,27 @@ class OtpPage extends ConsumerStatefulWidget {
 }
 
 class _OtpPageState extends ConsumerState<OtpPage> {
+  static const _resendCooldownSeconds = 60;
+
   final _otpController = TextEditingController();
   bool _loading = false;
   bool _resending = false;
+  bool _verifyInFlight = false;
+  bool _resendInFlight = false;
+  int _resendCooldown = _resendCooldownSeconds;
 
   bool get _canVerify => _otpController.text.trim().length == 6;
+  bool get _canResend =>
+      !_resending && !_loading && !_resendInFlight && _resendCooldown <= 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // OTP was just requested on the login screen, so start cooldown immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startResendCooldown();
+    });
+  }
 
   @override
   void dispose() {
@@ -28,10 +44,26 @@ class _OtpPageState extends ConsumerState<OtpPage> {
     super.dispose();
   }
 
+  void _startResendCooldown() {
+    _resendCooldown = _resendCooldownSeconds;
+    if (mounted) setState(() {});
+    Future.doWhile(() async {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return false;
+      if (_resendCooldown <= 1) {
+        setState(() => _resendCooldown = 0);
+        return false;
+      }
+      setState(() => _resendCooldown -= 1);
+      return true;
+    });
+  }
+
   Future<void> _verify() async {
     final token = _otpController.text.trim();
-    if (token.length < 6) return;
+    if (token.length < 6 || _verifyInFlight) return;
 
+    _verifyInFlight = true;
     setState(() => _loading = true);
     try {
       final isNewUser = await ref
@@ -48,15 +80,20 @@ class _OtpPageState extends ConsumerState<OtpPage> {
         ).showSnackBar(SnackBar(content: Text('Verification failed: $e')));
       }
     } finally {
+      _verifyInFlight = false;
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _resend() async {
+    if (!_canResend) return;
+
+    _resendInFlight = true;
     setState(() => _resending = true);
     try {
       await ref.read(sessionProvider.notifier).register(widget.phone);
       if (mounted) {
+        _startResendCooldown();
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('OTP sent again')));
@@ -68,6 +105,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
         ).showSnackBar(SnackBar(content: Text('Failed to resend OTP: $e')));
       }
     } finally {
+      _resendInFlight = false;
       if (mounted) setState(() => _resending = false);
     }
   }
@@ -181,10 +219,13 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                         const SizedBox(height: 10),
                         Center(
                           child: TextButton(
-                            onPressed:
-                                (_resending || _loading) ? null : _resend,
+                            onPressed: _canResend ? _resend : null,
                             child: Text(
-                              _resending ? 'Resending...' : 'Resend OTP',
+                              _resending
+                                  ? 'Resending...'
+                                  : _resendCooldown > 0
+                                  ? 'Resend OTP in ${_resendCooldown}s'
+                                  : 'Resend OTP',
                             ),
                           ),
                         ),
