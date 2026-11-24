@@ -14,11 +14,34 @@ type VerifyBody = {
   token?: string;
 };
 
-const OTP_COOLDOWN_SECONDS = 60;
+/** Min gap between OTPs to the same phone. */
+const OTP_COOLDOWN_SECONDS = 180;
+/** Max OTP sends per client IP inside the IP window. */
+const OTP_IP_MAX_REQUESTS = 3;
+const OTP_IP_WINDOW_SECONDS = 600;
+const ESTONIA_PHONE_RE = /^\+372\d{7,8}$/;
+
 const memoryOtpCooldowns = new Map<string, number>();
+const memoryIpBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function normalizePhone(phone: string) {
-  return phone.trim().replace(/[^\d+]/g, "");
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/[^\d]/g, "");
+  if (digits.startsWith("372")) {
+    return `+${digits}`;
+  }
+  if (trimmed.startsWith("+")) {
+    return `+${digits}`;
+  }
+  return digits ? `+${digits}` : "";
+}
+
+function clientIp(request: { ip: string; headers: Record<string, unknown> }) {
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0]?.trim() || request.ip;
+  }
+  return request.ip;
 }
 
 async function claimOtpSendSlot(phone: string): Promise<boolean> {
@@ -45,6 +68,37 @@ async function claimOtpSendSlot(phone: string): Promise<boolean> {
   return true;
 }
 
+async function claimOtpIpSlot(ip: string): Promise<boolean> {
+  const key = `otp:ip:${ip}`;
+
+  if (hasRedisConfig()) {
+    const redis = getRedisClient();
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, OTP_IP_WINDOW_SECONDS);
+    }
+    return count <= OTP_IP_MAX_REQUESTS;
+  }
+
+  const now = Date.now();
+  const bucket = memoryIpBuckets.get(ip);
+  if (!bucket || bucket.resetAt <= now) {
+    memoryIpBuckets.set(ip, {
+      count: 1,
+      resetAt: now + OTP_IP_WINDOW_SECONDS * 1000,
+    });
+    return true;
+  }
+
+  if (bucket.count >= OTP_IP_MAX_REQUESTS) {
+    return false;
+  }
+
+  bucket.count += 1;
+  memoryIpBuckets.set(ip, bucket);
+  return true;
+}
+
 export default async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterBody }>("/register", async (request, reply) => {
     const { phone: rawPhone, channel = "sms" } = request.body ?? {};
@@ -56,13 +110,23 @@ export default async function authRoutes(app: FastifyInstance) {
     }
 
     const phone = normalizePhone(rawPhone);
-    if (!phone) {
+    if (!ESTONIA_PHONE_RE.test(phone)) {
       return reply.code(400).send({
-        error: "phone is required",
+        error: "Only Estonian numbers (+372) are supported.",
       });
     }
 
     try {
+      const ip = clientIp(request);
+      const ipAllowed = await claimOtpIpSlot(ip);
+      if (!ipAllowed) {
+        return reply.code(429).send({
+          error:
+            "Too many OTP requests from this network. Please wait and try again.",
+          retryAfterSeconds: OTP_IP_WINDOW_SECONDS,
+        });
+      }
+
       const allowed = await claimOtpSendSlot(phone);
       if (!allowed) {
         return reply.code(429).send({
@@ -111,7 +175,7 @@ export default async function authRoutes(app: FastifyInstance) {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.verifyOtp({
-        phone,
+        phone: normalizePhone(phone),
         token,
         type: "sms",
       });
