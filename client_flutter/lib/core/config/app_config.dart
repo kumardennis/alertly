@@ -18,6 +18,12 @@ class AppConfig {
 
   static bool get hasMapboxAccessToken => mapboxAccessToken.trim().isNotEmpty;
 
+  /// Cloudflare Turnstile site key (public). Required for web OTP sends.
+  static String get turnstileSiteKey =>
+      dotenv.env['TURNSTILE_SITE_KEY']?.trim() ?? '';
+
+  static bool get hasTurnstileSiteKey => turnstileSiteKey.isNotEmpty;
+
   static void validate() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(

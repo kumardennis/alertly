@@ -1,10 +1,13 @@
 import 'package:alertly/core/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/session_provider.dart';
+import '../../core/captcha/turnstile_captcha.dart';
+import '../../core/config/app_config.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -19,10 +22,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _phoneController = TextEditingController();
   bool _loading = false;
   bool _sendInFlight = false;
+  String? _captchaToken;
+  int _captchaResetKey = 0;
+
+  bool get _requiresCaptcha => kIsWeb && AppConfig.hasTurnstileSiteKey;
 
   bool get _canSubmit {
     final digits = _phoneController.text.trim();
-    return digits.length >= 7;
+    if (digits.length < 7) return false;
+    if (_requiresCaptcha && (_captchaToken == null || _captchaToken!.isEmpty)) {
+      return false;
+    }
+    return true;
   }
 
   @override
@@ -39,12 +50,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => _loading = true);
     try {
       final phone = '$_prefix$local';
-      await ref.read(sessionProvider.notifier).register(phone);
+      await ref
+          .read(sessionProvider.notifier)
+          .register(phone, captchaToken: _captchaToken);
       if (mounted) {
         context.go('/otp?phone=${Uri.encodeComponent(phone)}');
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _captchaToken = null;
+          _captchaResetKey += 1;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
@@ -197,6 +214,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                           ],
                         ),
+                        if (_requiresCaptcha) ...[
+                          const SizedBox(height: 14),
+                          TurnstileCaptcha(
+                            key: ValueKey(_captchaResetKey),
+                            siteKey: AppConfig.turnstileSiteKey,
+                            onToken: (token) {
+                              setState(() => _captchaToken = token);
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         SizedBox(
                           width: double.infinity,

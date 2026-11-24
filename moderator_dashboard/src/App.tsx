@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
+import { Turnstile } from "./Turnstile";
 import "./App.css";
 
 type AlertStatus =
@@ -27,6 +28,8 @@ type AlertRow = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE?.trim() ?? "";
+const TURNSTILE_SITE_KEY =
+  import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "";
 const DEFAULT_SUPABASE_URL = "https://vebbrghiubfssxucqbfq.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_msTXazQTkrFOHg1wLQ-x6w_UKOqP6v4";
@@ -44,6 +47,8 @@ function App() {
   const [otp, setOtp] = useState("");
   const [otpRequested, setOtpRequested] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<AlertStatus>("pending");
   const [flaggedOnly, setFlaggedOnly] = useState(true);
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
@@ -149,6 +154,11 @@ function App() {
       return;
     }
 
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError("Complete the captcha before requesting an OTP.");
+      return;
+    }
+
     setAuthLoading(true);
     setError(null);
 
@@ -161,6 +171,7 @@ function App() {
         body: JSON.stringify({
           phone: normalizedPhone,
           channel: "sms",
+          captchaToken: captchaToken ?? undefined,
         }),
       });
 
@@ -176,6 +187,8 @@ function App() {
           ? caughtError.message
           : "Failed to send OTP";
       setError(message);
+      setCaptchaToken(null);
+      setCaptchaKey((value) => value + 1);
     } finally {
       setAuthLoading(false);
     }
@@ -314,10 +327,17 @@ function App() {
                 autoComplete="tel"
               />
             </label>
+            <Turnstile
+              key={captchaKey}
+              siteKey={TURNSTILE_SITE_KEY}
+              onToken={setCaptchaToken}
+            />
             <button
               type="submit"
               className="button primary"
-              disabled={authLoading}
+              disabled={
+                authLoading || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)
+              }
             >
               {authLoading ? "Sending..." : "Send OTP"}
             </button>

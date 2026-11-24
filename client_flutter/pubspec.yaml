@@ -1,7 +1,7 @@
 name: alertly
 description: "Alertly - Community alert platform."
 publish_to: "none"
-version: 0.3.4+9
+version: 0.3.5+10
 
 environment:
   sdk: ^3.7.0
@@ -20,6 +20,7 @@ dependencies:
   mapbox_maps_flutter: ^2.22.0
   supabase_flutter: ^2.12.2
   url_launcher: ^6.3.1
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

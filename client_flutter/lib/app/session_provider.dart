@@ -166,11 +166,16 @@ class SessionNotifier extends Notifier<Session?> {
   }
 
   /// Sends OTP to [phone] (E.164 format, e.g. +37255512345) via the backend.
-  Future<void> register(String phone) async {
+  /// [captchaToken] is required for browser/web clients when Turnstile is enabled.
+  Future<void> register(String phone, {String? captchaToken}) async {
     final api = createApiClient();
     await api.post<bool>(
       '/api/auth/register',
-      body: {'phone': phone},
+      body: {
+        'phone': phone,
+        if (captchaToken != null && captchaToken.isNotEmpty)
+          'captchaToken': captchaToken,
+      },
       decode: (_) => true,
     );
   }

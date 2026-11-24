@@ -1,10 +1,13 @@
 import 'package:alertly/core/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/session_provider.dart';
+import '../../core/captcha/turnstile_captcha.dart';
+import '../../core/config/app_config.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   const OtpPage({super.key, required this.phone});
@@ -24,10 +27,19 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   bool _verifyInFlight = false;
   bool _resendInFlight = false;
   int _resendCooldown = _resendCooldownSeconds;
+  String? _captchaToken;
+  int _captchaResetKey = 0;
+
+  bool get _requiresCaptcha => kIsWeb && AppConfig.hasTurnstileSiteKey;
 
   bool get _canVerify => _otpController.text.trim().length == 6;
   bool get _canResend =>
-      !_resending && !_loading && !_resendInFlight && _resendCooldown <= 0;
+      !_resending &&
+      !_loading &&
+      !_resendInFlight &&
+      _resendCooldown <= 0 &&
+      (!_requiresCaptcha ||
+          (_captchaToken != null && _captchaToken!.isNotEmpty));
 
   @override
   void initState() {
@@ -91,8 +103,12 @@ class _OtpPageState extends ConsumerState<OtpPage> {
     _resendInFlight = true;
     setState(() => _resending = true);
     try {
-      await ref.read(sessionProvider.notifier).register(widget.phone);
+      await ref
+          .read(sessionProvider.notifier)
+          .register(widget.phone, captchaToken: _captchaToken);
       if (mounted) {
+        _captchaToken = null;
+        _captchaResetKey += 1;
         _startResendCooldown();
         ScaffoldMessenger.of(
           context,
@@ -100,6 +116,10 @@ class _OtpPageState extends ConsumerState<OtpPage> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _captchaToken = null;
+          _captchaResetKey += 1;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to resend OTP: $e')));
@@ -216,6 +236,16 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                             ),
                           ),
                         ),
+                        if (_requiresCaptcha) ...[
+                          const SizedBox(height: 12),
+                          TurnstileCaptcha(
+                            key: ValueKey(_captchaResetKey),
+                            siteKey: AppConfig.turnstileSiteKey,
+                            onToken: (token) {
+                              setState(() => _captchaToken = token);
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         Center(
                           child: TextButton(

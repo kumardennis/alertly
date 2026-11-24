@@ -1,12 +1,18 @@
 import { FastifyInstance } from "fastify";
 
+import { isAllowedBrowserOrigin } from "../lib/origins";
 import { getRedisClient, hasRedisConfig } from "../lib/redis";
 import { getSupabaseClient } from "../lib/supabase";
+import {
+  isTurnstileConfigured,
+  verifyTurnstileToken,
+} from "../lib/turnstile";
 import { createUser, getUser } from "../funtions/userOperations";
 
 type RegisterBody = {
   phone?: string;
   channel?: "sms" | "whatsapp";
+  captchaToken?: string;
 };
 
 type VerifyBody = {
@@ -101,7 +107,11 @@ async function claimOtpIpSlot(ip: string): Promise<boolean> {
 
 export default async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterBody }>("/register", async (request, reply) => {
-    const { phone: rawPhone, channel = "sms" } = request.body ?? {};
+    const {
+      phone: rawPhone,
+      channel = "sms",
+      captchaToken,
+    } = request.body ?? {};
 
     if (!rawPhone) {
       return reply.code(400).send({
@@ -116,8 +126,40 @@ export default async function authRoutes(app: FastifyInstance) {
       });
     }
 
+    const originHeader = request.headers.origin;
+    const origin =
+      typeof originHeader === "string" ? originHeader : undefined;
+    const originCheck = isAllowedBrowserOrigin(origin);
+
+    if (originCheck.isBrowser && !originCheck.allowed) {
+      return reply.code(403).send({
+        error: "Origin is not allowed to request OTP.",
+      });
+    }
+
     try {
       const ip = clientIp(request);
+
+      // Browser clients (web app / moderator) must pass Turnstile when configured.
+      if (originCheck.isBrowser && isTurnstileConfigured()) {
+        const token = captchaToken?.trim();
+        if (!token) {
+          return reply.code(400).send({
+            error: "Captcha is required.",
+          });
+        }
+
+        const captcha = await verifyTurnstileToken({
+          token,
+          remoteIp: ip,
+        });
+        if (!captcha.ok) {
+          return reply.code(403).send({
+            error: captcha.error ?? "Captcha failed.",
+          });
+        }
+      }
+
       const ipAllowed = await claimOtpIpSlot(ip);
       if (!ipAllowed) {
         return reply.code(429).send({
